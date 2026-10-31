@@ -25,9 +25,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("n", type=int, nargs="+")
     parser.add_argument("--no-window", action="store_true")
     parser.add_argument("--scale", type=int, default=1)
-    parser.add_argument("--speed", type=float, default=240)
+    parser.add_argument("--speed", type=float, default=10)
     parser.add_argument("--max-steps", type=int, default=10**7)
-    parser.add_argument("--max-cells", type=int, default=1000)
+    parser.add_argument("--max-cells", type=int, default=32)
 
     args = parser.parse_args()
     check_args(args)

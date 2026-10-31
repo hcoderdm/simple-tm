@@ -105,7 +105,6 @@ class Window:
         self.run, self.reported = run, False
         self.image = tk.PhotoImage(master=self.root)
         self.canvas.itemconfigure(self.item, image=self.image)
-        self.width = 0
         self.offsets = [0] * run.M.n_tapes
         self.carry, self.last = 0.0, time.perf_counter()
         self.tick()
@@ -143,15 +142,15 @@ class Window:
     def size(self) -> tuple[int, int]:
         """Width and height of the drawing, in pixels."""
         k, m = self.scale, len(self.run.T)
-        return self.width * k, m * k + GAP * (m - 1)
+        return self.cells * k, m * k + GAP * (m - 1)
 
     def draw(self) -> None:
-        """Draw the view of each tape as `scale` rows of pixels, tape 0 on top."""
+        """Draw the view of each tape as `scale` rows of pixels, tape 0 on top, padded with ∅ to `cells` cells."""
         k, run = self.scale, self.run
         for j, (T, i) in enumerate(zip(run.T, run.i)):
             o = self.offsets[j] = min(max(self.offsets[j], i - self.cells + 1), i)
             view = T[o : o + self.cells]
-            self.width = max(self.width, len(view))
+            view += ["∅"] * (self.cells - len(view))
             row = "{" + " ".join(c for c in row_colors(view, i - o, run.s) for _ in range(k)) + "}"
             self.image.put(" ".join([row] * k), to=(0, j * (k + GAP)))
 

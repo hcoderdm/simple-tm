@@ -7,7 +7,7 @@ uv run main.py identity 5                 # outputs its input, NtS(5) = 101
 uv run main.py one 5                      # outputs 1 on every input
 uv run main.py zero 5 --no-window         # just print the result
 uv run main.py reverse 6 --scale 8        # a 2-tape machine: tapes stacked
-uv run main.py reverse 300 --scale 4 --speed 60   # bigger pixels, slower replay
+uv run main.py reverse 300 --scale 4 --speed 60   # bigger pixels, faster replay
 uv run main.py add 5 3                    # machines with two inputs take two numbers
 uv run main.py multiply 6 7 --scale 6
 uv run main.py --help
