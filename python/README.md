@@ -14,6 +14,6 @@ uv run main.py --help
 uv run pytest                             # run the tests
 ```
 
-A machine with `"n_inputs": 1` runs on x = NtS(n), the binary representation of n. A machine with k > 1 inputs runs on x = pf(NtS(n_1)) ⋯ pf(NtS(n_{k-1})) NtS(n_k), where pf(z) = z_0 z_0 z_1 z_1 ⋯ z_{|z|-1} z_{|z|-1} 0 1 is the prefix-free encoding of [introtcs §2.5.2](https://introtcs.org/public/lec_02_representation.html). The arithmetic machines `add`, `subtract` (truncated at 0), and `multiply` take two numbers and output the result in binary; see `ATTRIBUTIONS.md` for where their algorithms come from.
+A machine with `"n_inputs": 1` runs on x = NtS(n), the binary representation of n. A machine with k > 1 inputs runs on x = pf(NtS(n_1)) ⋯ pf(NtS(n_{k-1})) NtS(n_k), where pf(z) = z_0 z_0 z_1 z_1 ⋯ z_{|z|-1} z_{|z|-1} 0 1 is the prefix-free encoding of [introtcs §2.5.2](https://introtcs.org/public/lec_02_representation.html). The arithmetic machines `add`, `subtract` (truncated at 0), `multiply`, and `divide` (rounded down; never halts when dividing by 0) take two numbers and output the result in binary; see `ATTRIBUTIONS.md` for where their algorithms come from.
 
 To add a machine, put a JSON file in `../machines/` (see `machines/one.json` for the format, `machines/reverse.json` for a machine with several tapes, and `machines/add.json` for one with two inputs).
