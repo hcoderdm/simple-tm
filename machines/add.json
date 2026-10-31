@@ -1,6 +1,6 @@
 {
   "name": "add",
-  "description": "$F : \\{0,1\\}^* \\to \\{0,1\\}^*$ such that $F(\\mathrm{pf}(\\mathrm{NtS}(a))\\,\\mathrm{NtS}(b)) = \\mathrm{NtS}(a + b)$",
+  "description": "$F : \\mathbb{N}^2 \\to \\mathbb{N}$ such that $F(a, b) = a + b$",
   "n_states": 6,
   "n_inputs": 2,
   "n_tapes": 3,

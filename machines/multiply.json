@@ -1,6 +1,6 @@
 {
   "name": "multiply",
-  "description": "$F : \\{0,1\\}^* \\to \\{0,1\\}^*$ such that $F(\\mathrm{pf}(\\mathrm{NtS}(a))\\,\\mathrm{NtS}(b)) = \\mathrm{NtS}(a \\cdot b)$",
+  "description": "$F : \\mathbb{N}^2 \\to \\mathbb{N}$ such that $F(a, b) = a \\cdot b$",
   "n_states": 11,
   "n_inputs": 2,
   "n_tapes": 3,

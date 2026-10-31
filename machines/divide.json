@@ -1,6 +1,6 @@
 {
   "name": "divide",
-  "description": "$F : \\{0,1\\}^* \\to \\{0,1\\}^*$ such that $F(\\mathrm{pf}(\\mathrm{NtS}(a))\\,\\mathrm{NtS}(b)) = \\mathrm{NtS}(\\lfloor a / b \\rfloor)$ for $b > 0$",
+  "description": "$F : \\mathbb{N}^2 \\to \\mathbb{N}$ such that $F(a, b) = \\lfloor a / b \\rfloor$ for $b > 0$",
   "n_states": 10,
   "n_inputs": 2,
   "n_tapes": 3,

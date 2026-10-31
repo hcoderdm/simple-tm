@@ -2,13 +2,19 @@
 
 ## Turing machine algorithms
 
-The arithmetic machines in `machines/` were written for this project, following these sources.
+The machines in `machines/` were written for this project. Their algorithms come from these sources.
 
-- `add`: ripple-carry addition, least significant bit first, with the carry kept in the state, as in the "Add two n-bit integers" algorithm of Boaz Barak, *Introduction to Theoretical Computer Science*, [§4.2 "Extended example: Addition and Multiplication"](https://introtcs.org/public/lec_03a_computing_every_function.html). It runs in linear time, unlike the increment/decrement loop of Wayne Eberly's [CPSC 351 Lecture #12 notes](https://cspages.ucalgary.ca/~eberly/Courses/CPSC351/2025/3_Turing_Machines/L12/L12_presentation_notes.pdf) (University of Calgary), which takes time exponential in the number of bits.
-- `subtract`: column-by-column subtraction with borrows, right to left, from Wikipedia, ["Binary number", § Subtraction](https://en.wikipedia.org/wiki/Binary_number#Subtraction), truncated at 0 as in ["Monus"](https://en.wikipedia.org/wiki/Monus). Eberly's [CPSC 351 Tutorial #12](https://cspages.ucalgary.ca/~eberly/Courses/CPSC351/2025/3_Turing_Machines/T12/tutorial_12.pdf) builds the same function by repeated decrements, again in exponential time.
-- `multiply`: grade-school (shift-and-add) multiplication, Algorithm 0.2 of Barak, [§0.1 "Integer multiplication: an example of an algorithm"](https://introtcs.org/public/lec_01_introduction.html), and Wikipedia, ["Multiplication algorithm", § Long multiplication](https://en.wikipedia.org/wiki/Multiplication_algorithm#Long_multiplication). It reads b from its most significant bit, Horner style (P ← 2P + b_j · a), in O(|b| · (|a| + |b|)) steps.
-- `divide`: binary long division, one quotient bit per bit of a (R ← 2R + next bit; if R ≥ b, subtract b and write 1), from Wikipedia, ["Division algorithm", § Integer division (unsigned) with remainder](https://en.wikipedia.org/wiki/Division_algorithm#Integer_division_(unsigned)_with_remainder). It takes O(|b| · (|a| − |b| + 1)) steps in its main loop, where repeated subtraction would take time exponential in the number of bits, as the same page notes. As in introtcs, F is partial: on b = 0 the machine never halts.
-- Two inputs a and b are given as pf(NtS(a)) NtS(b), with the prefix-free encoding pf of Barak, [§2.5.2](https://introtcs.org/public/lec_02_representation.html).
+| Machine | Algorithm | Sources |
+|---|---|---|
+| `add` | Ripple-carry addition | Barak, *Introduction to Theoretical Computer Science*, [§4.2](https://introtcs.org/public/lec_03a_computing_every_function.html) |
+| `subtract` | Subtraction with borrows, truncated at 0 | Wikipedia, ["Binary number"](https://en.wikipedia.org/wiki/Binary_number#Subtraction), ["Monus"](https://en.wikipedia.org/wiki/Monus) |
+| `multiply` | Shift-and-add (long) multiplication | Barak, [§0.1](https://introtcs.org/public/lec_01_introduction.html); Wikipedia, ["Multiplication algorithm"](https://en.wikipedia.org/wiki/Multiplication_algorithm#Long_multiplication) |
+| `divide`, `mod` | Binary long division | Wikipedia, ["Division algorithm"](https://en.wikipedia.org/wiki/Division_algorithm#Integer_division_(unsigned)_with_remainder) |
+| `compare`, `equal` | Copy to a second tape and compare | Rajaraman, [CS G714 notes "7. Time Complexity"](https://www.ccs.neu.edu/home/rraj/Courses/G714/S09/Notes/7.TimeComplexity.txt); Wikipedia, ["Digital comparator"](https://en.wikipedia.org/wiki/Digital_comparator) |
+| `increment` | Carry from the least significant bit | Barak, [Chapter 7](https://introtcs.org/public/lec_06_loops.html) |
+| `palindrome` | Copy to a second tape and compare in reverse | Barak, [§7.1.1](https://introtcs.org/public/lec_06_loops.html) |
+| `and`, `or`, `not`, `nand`, `nor`, `xor`, `xnor` | Bitwise logic gates | Wikipedia, ["Logic gate"](https://en.wikipedia.org/wiki/Logic_gate), ["Bitwise operation"](https://en.wikipedia.org/wiki/Bitwise_operation); Barak, [Chapter 3](https://introtcs.org/public/lec_03_computation.html) |
+| Inputs of several numbers | Prefix-free encoding | Barak, [§2.5.2](https://introtcs.org/public/lec_02_representation.html) |
 
 ## Open Color
 
