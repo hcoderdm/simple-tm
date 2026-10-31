@@ -2,8 +2,7 @@
 
 ## Open Color
 
-The colors in `python/window.py` come from [Open Color](https://github.com/yeun/open-color)
-by heeyeun, used under the MIT License:
+The colors in `python/window.py` come from [Open Color](https://github.com/yeun/open-color) by heeyeun, used under the MIT License:
 
 ```
 MIT License
