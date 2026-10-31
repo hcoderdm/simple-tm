@@ -1,0 +1,9 @@
+{
+  "name": "identity",
+  "description": "$F : \\{0,1\\}^* \\to \\{0,1\\}^*$ such that $F(x) = x$",
+  "n_states": 1,
+  "n_tapes": 1,
+  "delta": [
+    [0, "▷", 0, "▷", "H"]
+  ]
+}

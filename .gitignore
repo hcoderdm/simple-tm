@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+.venv/
+target/
+.DS_Store
+python/tests/

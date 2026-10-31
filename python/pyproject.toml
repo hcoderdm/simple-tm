@@ -1,0 +1,14 @@
+[project]
+name = "simple-tm"
+version = "0.1.0"
+description = "Run Turing machines from the command line and draw them pixel by pixel"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
