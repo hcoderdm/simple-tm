@@ -17,6 +17,7 @@ class TuringMachine:
     name: str
     description: str
     n_states: int
+    n_inputs: int
     n_tapes: int
     delta: dict[tuple[int, str], tuple[int, str, str]]
 
@@ -34,6 +35,8 @@ def check_machine(machine: TuringMachine) -> None:
     k, m = machine.n_states, machine.n_tapes
     if k < 1:
         raise ValueError(f"Invalid {k}")
+    if machine.n_inputs < 1:
+        raise ValueError(f"Invalid {machine.n_inputs}")
     if m < 1:
         raise ValueError(f"Invalid {m}")
     for (s, sigma), (s2, sigma2, d) in machine.delta.items():
@@ -51,9 +54,16 @@ def load_machine(path: Path) -> TuringMachine:
         if (s, sigma) in delta:
             raise ValueError(f"Invalid {(s, sigma)}")
         delta[s, sigma] = (s2, sigma2, d)
-    machine = TuringMachine(data["name"], data["description"], data["n_states"], data["n_tapes"], delta)
+    machine = TuringMachine(data["name"], data["description"], data["n_states"], data["n_inputs"], data["n_tapes"], delta)
     check_machine(machine)
     return machine
+
+
+def encode(numbers: list[int]) -> str:
+    """x for the inputs n_1, ..., n_k: pf(NtS(n_1)) ... pf(NtS(n_{k-1})) NtS(n_k), where
+    pf(z) = z_0 z_0 z_1 z_1 ... z_{|z|-1} z_{|z|-1} 0 1 is the prefix-free encoding of introtcs §2.5.2."""
+    *init, last = (f"{n:b}" for n in numbers)
+    return "".join("".join(c + c for c in z) + "01" for z in init) + last
 
 
 class Configuration:

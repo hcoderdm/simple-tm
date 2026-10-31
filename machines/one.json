@@ -2,6 +2,7 @@
   "name": "one",
   "description": "$F : \\{0,1\\}^* \\to \\{0,1\\}$ such that $F(x) = 1$",
   "n_states": 2,
+  "n_inputs": 1,
   "n_tapes": 1,
   "delta": [
     [0, "▷", 0, "▷", "R"],

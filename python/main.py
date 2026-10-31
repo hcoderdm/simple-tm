@@ -6,7 +6,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from tm import SIGMA, Configuration, load_machine
+from tm import Configuration, encode, load_machine
 from window import Window
 
 MACHINES_PATH = Path(__file__).parent.parent / "machines"
@@ -18,11 +18,11 @@ def parse_args() -> argparse.Namespace:
 
     # Get the names of the machines.
     names = sorted(path.stem for path in MACHINES_PATH.glob("*.json"))
-    parser = argparse.ArgumentParser(description="Run a Turing machine from machines/<name>.json on a natural number, log M(x), and draw the config.")
+    parser = argparse.ArgumentParser(description="Run a Turing machine from machines/<name>.json on natural numbers, log M(x), and draw the config.")
     
     # Add arguments to the parser.
     parser.add_argument("machine", choices=names)
-    parser.add_argument("n", type=int)
+    parser.add_argument("n", type=int, nargs="+")
     parser.add_argument("--no-window", action="store_true")
     parser.add_argument("--scale", type=int, default=1)
     parser.add_argument("--speed", type=float, default=240)
@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
 
 def check_args(args: argparse.Namespace) -> None:
     """Check the arguments."""
-    if args.n < 0:
+    if any(n < 0 for n in args.n):
         raise SystemExit(f"Invalid {args.n=}")
     if args.scale < 1:
         raise SystemExit(f"Invalid {args.scale=}")
@@ -63,7 +63,9 @@ def main() -> int:
     
     # Load the machine.
     M = load_machine(MACHINES_PATH / f"{args.machine}.json")
-    x = f"{args.n:b}"
+    if len(args.n) != M.n_inputs:
+        raise SystemExit(f"{M.name} takes {M.n_inputs} numbers, got {len(args.n)}")
+    x = encode(args.n)
 
     # Run the machine.
     config = Configuration(M, x)
