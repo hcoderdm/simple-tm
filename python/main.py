@@ -1,9 +1,4 @@
-"""Run a Turing machine from machines/<name>.json on a natural number, log M(x), and draw the config.
-
-    uv run main.py reverse 6
-
-The number n becomes the input x = NtS(n), its binary representation (most significant bit first).
-"""
+# main.py
 
 from __future__ import annotations
 
@@ -23,7 +18,7 @@ def parse_args() -> argparse.Namespace:
 
     # Get the names of the machines.
     names = sorted(path.stem for path in MACHINES_PATH.glob("*.json"))
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="Run a Turing machine from machines/<name>.json on a natural number, log M(x), and draw the config.")
     
     # Add arguments to the parser.
     parser.add_argument("machine", choices=names)

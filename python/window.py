@@ -1,10 +1,4 @@
-"""A window that runs a (multi-tape) Turing machine and draws its current step: one row of
-pixels per tape, tape 0 on top, one pixel per tape cell, with each head drawn in a shade of red
-for the current state.
-
-Nothing about the run is known in advance: the rows widen as the tapes grow, and the window
-grows with them up to the size of the screen.
-"""
+# window.py
 
 from __future__ import annotations
 

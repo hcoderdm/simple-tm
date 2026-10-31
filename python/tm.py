@@ -1,25 +1,4 @@
-"""Turing machines as defined in Barak, Introduction to Theoretical Computer Science,
-Section 7.1.2 (https://introtcs.org/public/lec_06_loops.html), with m >= 1 tapes.
-
-A Turing machine M with k states and m tapes over the alphabet Sigma = {0, 1, ▷, ∅} is a
-transition function
-
-    delta_M : [k] x Sigma^m -> [k] x Sigma^m x {L, R, S, H}^m.
-
-Here ▷ marks the start of a tape and ∅ is a blank cell.
-
-To run M on x in {0,1}^n: tape 1 starts as ▷ x ∅ ∅ ..., every other tape as ▷ ∅ ∅ ...,
-every head at 0, and the state s = 0. Each step reads sigma = (T_1[i_1], ..., T_m[i_m]),
-computes (s', sigma', D) = delta_M(s, sigma), sets s <- s' and T_j[i_j] <- sigma'_j, then
-moves each head: R goes to i_j + 1, L to max(i_j - 1, 0), and S stays put. M halts when some
-D_j is H. By convention the output is read off the first tape: T_1[1] T_1[2] ... up to (not
-including) the first ∅. With m = 1 this is exactly the book's model.
-
-A machine is stored as JSON: {"name", "description", "n_states" (k), "n_tapes" (m),
-"delta": [[s, sigma, s', sigma', D], ...]}, with states s, s' as numbers in 0, ..., k - 1 and
-sigma, sigma', D as strings with one character per tape (for example "1∅" and "RS"). Pairs
-(s, sigma) not listed are (s, sigma, H...H): halt without changing anything.
-"""
+# tm.py
 
 from __future__ import annotations
 
@@ -65,7 +44,7 @@ def check_machine(machine: TuringMachine) -> None:
 
 
 def load_machine(path: Path) -> TuringMachine:
-    """Read a machine from its JSON file (format in the module docstring)."""
+    """Read a machine from its JSON file."""
     data = json.loads(path.read_text(encoding="utf-8"))
     delta = {}
     for s, sigma, s2, sigma2, d in data["delta"]:
