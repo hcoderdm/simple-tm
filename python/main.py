@@ -14,7 +14,7 @@ from pathlib import Path
 from tm import SIGMA, Configuration, load_machine
 from window import Window
 
-MACHINES_PATH = Path(__file__).parent / "machines"
+MACHINES_PATH = Path(__file__).parent.parent / "machines"
 LOGGER = logging.getLogger(__name__)
 
 
