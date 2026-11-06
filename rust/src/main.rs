@@ -12,11 +12,11 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::Parser;
-use clap::builder::PossibleValuesParser;
+use clap::builder::{PossibleValuesParser, RangedU64ValueParser};
+use clap::{Parser, value_parser};
 use num_bigint::BigUint;
 
-use simple_tm::tm::{Configuration, encode, load_machine};
+use simple_tm::tm::{Configuration, TuringMachine, encode};
 use window::Settings;
 
 const MACHINES_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../machines");
@@ -35,47 +35,46 @@ fn machine_names() -> Vec<String> {
     names
 }
 
+/// A float greater than 0.
+fn positive(s: &str) -> Result<f64, String> {
+    match s.parse::<f64>() {
+        Ok(x) if x > 0.0 => Ok(x),
+        Ok(_) => Err("must be greater than 0".to_owned()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Run a Turing machine from machines/<name>.json on natural numbers, log M(x), and draw the
 /// config.
 #[derive(Parser)]
 #[command(allow_negative_numbers = true)]
 struct Args {
+    /// The machine to run, from machines/<name>.json.
     #[arg(value_parser = PossibleValuesParser::new(machine_names()))]
     machine: String,
+    /// The natural numbers n_1, ..., n_k to encode as the input x.
     #[arg(required = true)]
     n: Vec<BigUint>,
+    /// Print M(x) without opening the window.
     #[arg(long)]
     no_window: bool,
-    #[arg(long, default_value_t = 1)]
+    /// Pixels per tape cell.
+    #[arg(long, default_value_t = 1, value_parser = RangedU64ValueParser::<usize>::new().range(1..))]
     scale: usize,
-    #[arg(long, default_value_t = 10.0)]
+    /// Steps per second.
+    #[arg(long, default_value_t = 10.0, value_parser = positive)]
     speed: f64,
-    #[arg(long, default_value_t = 10_000_000)]
+    /// Give up after this many steps.
+    #[arg(long, default_value_t = 10_000_000, value_parser = value_parser!(u64).range(1..))]
     max_steps: u64,
-    #[arg(long, default_value_t = 32)]
+    /// The most cells of each tape to show.
+    #[arg(long, default_value_t = 32, value_parser = RangedU64ValueParser::<usize>::new().range(1..))]
     max_cells: usize,
-}
-
-/// Check the arguments.
-fn check_args(args: &Args) -> Result<(), String> {
-    if args.scale < 1 {
-        return Err(format!("Invalid args.scale={}", args.scale));
-    }
-    if args.speed.is_nan() || args.speed <= 0.0 {
-        return Err(format!("Invalid args.speed={}", args.speed));
-    }
-    if args.max_steps < 1 {
-        return Err(format!("Invalid args.max_steps={}", args.max_steps));
-    }
-    if args.max_cells < 1 {
-        return Err(format!("Invalid args.max_cells={}", args.max_cells));
-    }
-    Ok(())
 }
 
 /// Log M(x) if the machine halted, or that it did not halt within `max_steps` steps.
 fn log_result(config: &Configuration, max_steps: u64) {
-    if config.halted {
+    if config.is_halted() {
         eprintln!("{}", config.output());
     } else {
         eprintln!("M did not halt within {} steps", window::thousands(max_steps));
@@ -84,22 +83,23 @@ fn log_result(config: &Configuration, max_steps: u64) {
 
 fn main() -> ExitCode {
     let args = Args::parse();
-    if let Err(message) = check_args(&args) {
-        eprintln!("{message}");
-        return ExitCode::FAILURE;
-    }
 
     // Load the machine.
     let path = Path::new(MACHINES_PATH).join(format!("{}.json", args.machine));
-    let machine = match load_machine(&path) {
+    let machine = match TuringMachine::from_path(&path) {
         Ok(machine) => machine,
         Err(e) => {
             eprintln!("{}: {e}", path.display());
             return ExitCode::FAILURE;
         }
     };
-    if args.n.len() != machine.n_inputs {
-        eprintln!("{} takes {} numbers, got {}", machine.name, machine.n_inputs, args.n.len());
+    if args.n.len() != machine.num_inputs() {
+        eprintln!(
+            "{} takes {} numbers, got {}",
+            machine.name(),
+            machine.num_inputs(),
+            args.n.len()
+        );
         return ExitCode::FAILURE;
     }
     let x = encode(&args.n);
@@ -107,10 +107,10 @@ fn main() -> ExitCode {
     // Run the machine.
     let max_steps = args.max_steps;
     if args.no_window {
-        let mut config = Configuration::new(&machine, &x);
+        let mut config = Configuration::new(&machine, &x).expect("encode gives a binary string");
         config.run(max_steps);
         log_result(&config, max_steps);
-        ExitCode::from(u8::from(!config.halted))
+        ExitCode::from(u8::from(!config.is_halted()))
     } else {
         let settings =
             Settings { scale: args.scale, speed: args.speed, max_steps, max_cells: args.max_cells };

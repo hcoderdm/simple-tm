@@ -8,6 +8,7 @@
 
 use std::fmt;
 use std::fs;
+use std::io;
 use std::path::Path;
 
 use num_bigint::BigUint;
@@ -28,28 +29,76 @@ pub enum Symbol {
     Blank,
 }
 
-impl Symbol {
-    pub fn from_char(c: char) -> Option<Self> {
-        match c {
-            '0' => Some(Self::Zero),
-            '1' => Some(Self::One),
-            '▷' => Some(Self::Start),
-            '∅' => Some(Self::Blank),
-            _ => None,
-        }
-    }
+impl TryFrom<char> for Symbol {
+    type Error = char;
 
-    pub fn to_char(self) -> char {
-        SIGMA[self as usize]
+    fn try_from(c: char) -> Result<Self, char> {
+        match c {
+            '0' => Ok(Self::Zero),
+            '1' => Ok(Self::One),
+            '▷' => Ok(Self::Start),
+            '∅' => Ok(Self::Blank),
+            _ => Err(c),
+        }
     }
 }
 
-/// An error in a machine's definition or its JSON file.
+impl From<Symbol> for char {
+    fn from(sigma: Symbol) -> char {
+        SIGMA[sigma as usize]
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", char::from(*self))
+    }
+}
+
+/// A head move: one of {L, R, S, H}.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Move {
+    Left,
+    Right,
+    Stay,
+    Halt,
+}
+
+impl TryFrom<char> for Move {
+    type Error = char;
+
+    fn try_from(c: char) -> Result<Self, char> {
+        match c {
+            'L' => Ok(Self::Left),
+            'R' => Ok(Self::Right),
+            'S' => Ok(Self::Stay),
+            'H' => Ok(Self::Halt),
+            _ => Err(c),
+        }
+    }
+}
+
+impl Move {
+    /// How far the head moves.
+    fn offset(self) -> isize {
+        match self {
+            Self::Left => -1,
+            Self::Right => 1,
+            Self::Stay | Self::Halt => 0,
+        }
+    }
+}
+
+/// An error in a machine's definition, its JSON file, or its input.
 #[derive(Debug)]
 pub enum Error {
-    Io(std::io::Error),
+    Io(io::Error),
     Json(serde_json::Error),
-    Invalid(String),
+    NoStates,
+    NoInputs,
+    Tapes(usize),
+    Row { row: Row, reason: &'static str },
+    Input(String),
 }
 
 impl fmt::Display for Error {
@@ -57,14 +106,38 @@ impl fmt::Display for Error {
         match self {
             Self::Io(e) => write!(f, "{e}"),
             Self::Json(e) => write!(f, "{e}"),
-            Self::Invalid(what) => write!(f, "Invalid {what}"),
+            Self::NoStates => write!(f, "a machine needs at least 1 state"),
+            Self::NoInputs => write!(f, "a machine needs at least 1 input"),
+            Self::Tapes(m) => write!(f, "a machine needs 1 to {MAX_TAPES} tapes, not {m}"),
+            Self::Row { row, reason } => write!(f, "invalid row {row:?}: {reason}"),
+            Self::Input(x) => write!(f, "input {x:?} is not a binary string"),
         }
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Json(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
-/// One row of delta: (s, sigma, s', sigma', D).
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Json(e)
+    }
+}
+
+/// One row of delta as written in a machine's JSON file: (s, sigma, s', sigma', D).
 pub type Row = (usize, String, usize, String, String);
 
 /// delta(s, sigma) prepared for running: the next state, the symbols to write, how far each head
@@ -79,19 +152,18 @@ struct Entry {
 
 #[derive(Debug)]
 pub struct TuringMachine {
-    pub name: String,
-    pub description: String,
-    pub n_states: usize,
-    pub n_inputs: usize,
-    pub n_tapes: usize,
-    pub delta: Vec<Row>,
+    name: String,
+    description: String,
+    num_states: usize,
+    num_inputs: usize,
+    num_tapes: usize,
     /// table[s * 4^m + code(sigma)], where code reads sigma as a base-4 number.
     table: Vec<Option<Entry>>,
 }
 
-/// sigma as symbols, if every character is in Sigma.
-fn symbols(sigma: &str) -> Option<Vec<Symbol>> {
-    sigma.chars().map(Symbol::from_char).collect()
+/// The characters of `s`, if each one converts to a `T`.
+fn parse<T: TryFrom<char>>(s: &str) -> Option<Vec<T>> {
+    s.chars().map(|c| T::try_from(c).ok()).collect()
 }
 
 /// sigma read as a base-4 number, tape 1 first.
@@ -105,69 +177,116 @@ impl TuringMachine {
     ///
     /// # Errors
     ///
-    /// `Error::Invalid` if there are no states, inputs, or tapes, more than `MAX_TAPES` tapes, or
-    /// a row of delta that does not fit them (or repeats an earlier row's (s, sigma)).
+    /// If there are no states or inputs, not 1 to `MAX_TAPES` tapes, or a row of delta that does
+    /// not fit them (or repeats an earlier row's (s, sigma)).
     pub fn new(
-        name: &str,
-        description: &str,
-        n_states: usize,
-        n_inputs: usize,
-        n_tapes: usize,
-        delta: Vec<Row>,
+        name: impl Into<String>,
+        description: impl Into<String>,
+        num_states: usize,
+        num_inputs: usize,
+        num_tapes: usize,
+        delta: &[Row],
     ) -> Result<Self, Error> {
-        let (k, m) = (n_states, n_tapes);
+        let (k, m) = (num_states, num_tapes);
         if k < 1 {
-            return Err(Error::Invalid(k.to_string()));
+            return Err(Error::NoStates);
         }
-        if n_inputs < 1 {
-            return Err(Error::Invalid(n_inputs.to_string()));
+        if num_inputs < 1 {
+            return Err(Error::NoInputs);
         }
         if !(1..=MAX_TAPES).contains(&m) {
-            return Err(Error::Invalid(m.to_string()));
+            return Err(Error::Tapes(m));
         }
 
         let mut table: Vec<Option<Entry>> = (0..k << (2 * m)).map(|_| None).collect();
-        for row in &delta {
+        for row in delta {
             let (s, sigma, s2, sigma2, d) = row;
-            let invalid = || Error::Invalid(format!("{row:?}"));
-            let (Some(sigma), Some(written)) = (symbols(sigma), symbols(sigma2)) else {
-                return Err(invalid());
+            let invalid = |reason| Error::Row { row: row.clone(), reason };
+            let (Some(sigma), Some(written)) = (parse::<Symbol>(sigma), parse::<Symbol>(sigma2))
+            else {
+                return Err(invalid("symbols must be in {0, 1, ▷, ∅}"));
             };
-            let offsets: Option<Vec<isize>> = d
-                .chars()
-                .map(|c| match c {
-                    'L' => Some(-1),
-                    'R' => Some(1),
-                    'S' | 'H' => Some(0),
-                    _ => None,
-                })
-                .collect();
-            let Some(offsets) = offsets else {
-                return Err(invalid());
+            let Some(moves) = parse::<Move>(d) else {
+                return Err(invalid("moves must be in {L, R, S, H}"));
             };
-            if *s >= k || *s2 >= k || sigma.len() != m || written.len() != m || offsets.len() != m {
-                return Err(invalid());
+            if *s >= k || *s2 >= k {
+                return Err(invalid("state out of range"));
+            }
+            if sigma.len() != m || written.len() != m || moves.len() != m {
+                return Err(invalid("needs one symbol and move per tape"));
             }
             let entry = &mut table[(s << (2 * m)) + code(sigma)];
             if entry.is_some() {
-                return Err(invalid());
+                return Err(invalid("repeats an earlier (s, sigma)"));
             }
-            *entry = Some(Entry { state: *s2, written, offsets, halts: d.contains('H') });
+            *entry = Some(Entry {
+                state: *s2,
+                written,
+                offsets: moves.iter().map(|d| d.offset()).collect(),
+                halts: moves.contains(&Move::Halt),
+            });
         }
 
         Ok(Self {
-            name: name.to_owned(),
-            description: description.to_owned(),
-            n_states,
-            n_inputs,
-            n_tapes,
-            delta,
+            name: name.into(),
+            description: description.into(),
+            num_states,
+            num_inputs,
+            num_tapes,
             table,
         })
     }
+
+    /// Read a machine from its JSON file: {"name", "description", "n_states", "n_inputs",
+    /// "n_tapes", "delta"}.
+    ///
+    /// # Errors
+    ///
+    /// If the file cannot be read or parsed, or the machine is invalid (see `TuringMachine::new`).
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let file: MachineFile = serde_json::from_str(&fs::read_to_string(path)?)?;
+        Self::new(
+            file.name,
+            file.description,
+            file.n_states,
+            file.n_inputs,
+            file.n_tapes,
+            &file.delta,
+        )
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    #[must_use]
+    pub fn num_states(&self) -> usize {
+        self.num_states
+    }
+
+    #[must_use]
+    pub fn num_inputs(&self) -> usize {
+        self.num_inputs
+    }
+
+    #[must_use]
+    pub fn num_tapes(&self) -> usize {
+        self.num_tapes
+    }
+
+    /// delta(s, sigma), or None if it is not listed.
+    fn delta(&self, s: usize, sigma: impl IntoIterator<Item = Symbol>) -> Option<&Entry> {
+        self.table[(s << (2 * self.num_tapes)) + code(sigma)].as_ref()
+    }
 }
 
-/// A machine's JSON file: {"name", "description", "n_states", "n_inputs", "n_tapes", "delta"}.
+/// A machine's JSON file.
 #[derive(Deserialize)]
 struct MachineFile {
     name: String,
@@ -178,24 +297,6 @@ struct MachineFile {
     delta: Vec<Row>,
 }
 
-/// Read a machine from its JSON file.
-///
-/// # Errors
-///
-/// If the file cannot be read or parsed, or the machine is invalid (see `TuringMachine::new`).
-pub fn load_machine(path: &Path) -> Result<TuringMachine, Error> {
-    let text = fs::read_to_string(path).map_err(Error::Io)?;
-    let file: MachineFile = serde_json::from_str(&text).map_err(Error::Json)?;
-    TuringMachine::new(
-        &file.name,
-        &file.description,
-        file.n_states,
-        file.n_inputs,
-        file.n_tapes,
-        file.delta,
-    )
-}
-
 /// x for the inputs n_1, ..., n_k: pf(NtS(n_1)) ... pf(NtS(n_{k-1})) NtS(n_k), where
 /// pf(z) = z_0 z_0 z_1 z_1 ... z_{|z|-1} z_{|z|-1} 0 1 is the prefix-free encoding of introtcs
 /// §2.5.2.
@@ -203,6 +304,7 @@ pub fn load_machine(path: &Path) -> Result<TuringMachine, Error> {
 /// # Panics
 ///
 /// If `numbers` is empty.
+#[must_use]
 pub fn encode(numbers: &[BigUint]) -> String {
     let (last, init) = numbers.split_last().expect("at least one number");
     let mut x = String::new();
@@ -216,53 +318,51 @@ pub fn encode(numbers: &[BigUint]) -> String {
 }
 
 /// M running on input x: the tapes T, head positions i, and state s.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Configuration<'a> {
-    pub machine: &'a TuringMachine,
-    pub tapes: Vec<Vec<Symbol>>,
-    pub heads: Vec<usize>,
-    pub state: usize,
-    pub halted: bool,
-    pub n_steps: u64,
+    machine: &'a TuringMachine,
+    tapes: Vec<Vec<Symbol>>,
+    heads: Vec<usize>,
+    state: usize,
+    halted: bool,
+    steps: u64,
 }
 
 impl<'a> Configuration<'a> {
     /// M at its start on x: tape 1 is ▷ x ∅, every other tape ▷ ∅, all heads at 0, state 0.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// If x is not a binary string.
-    pub fn new(machine: &'a TuringMachine, x: &str) -> Self {
-        let x = symbols(x)
+    /// `Error::Input` if x is not a binary string.
+    pub fn new(machine: &'a TuringMachine, x: &str) -> Result<Self, Error> {
+        let x = parse::<Symbol>(x)
             .filter(|x| x.iter().all(|&c| matches!(c, Symbol::Zero | Symbol::One)))
-            .expect("x is a binary string");
+            .ok_or_else(|| Error::Input(x.to_owned()))?;
         let mut tapes = vec![[vec![Symbol::Start], x, vec![Symbol::Blank]].concat()];
-        tapes.resize(machine.n_tapes, vec![Symbol::Start, Symbol::Blank]);
-        Self {
+        tapes.resize(machine.num_tapes, vec![Symbol::Start, Symbol::Blank]);
+        Ok(Self {
             machine,
             tapes,
-            heads: vec![0; machine.n_tapes],
+            heads: vec![0; machine.num_tapes],
             state: 0,
             halted: false,
-            n_steps: 0,
-        }
+            steps: 0,
+        })
     }
 
     /// Run at most `max_steps` steps. Return true once M has halted.
     pub fn run(&mut self, max_steps: u64) -> bool {
-        let m = self.machine.n_tapes;
         let mut n = 0;
         while n < max_steps && !self.halted {
             n += 1;
             let sigma = self.tapes.iter().zip(&self.heads).map(|(tape, &i)| tape[i]);
-            let Some(entry) = &self.machine.table[(self.state << (2 * m)) + code(sigma)] else {
+            let Some(entry) = self.machine.delta(self.state, sigma) else {
                 // No entry: halt without changing anything.
                 self.halted = true;
                 break;
             };
             self.state = entry.state;
-            for (j, tape) in self.tapes.iter_mut().enumerate() {
-                let i = &mut self.heads[j];
+            for (j, (tape, i)) in self.tapes.iter_mut().zip(&mut self.heads).enumerate() {
                 tape[*i] = entry.written[j];
                 *i = i.saturating_add_signed(entry.offsets[j]);
                 if *i == tape.len() {
@@ -271,16 +371,49 @@ impl<'a> Configuration<'a> {
             }
             self.halted = entry.halts;
         }
-        self.n_steps += n;
+        self.steps += n;
         self.halted
     }
 
     /// T_1[1] T_1[2] ... up to the first ∅.
+    #[must_use]
     pub fn output(&self) -> String {
         self.tapes[0][1..]
             .iter()
             .take_while(|&&sigma| sigma != Symbol::Blank)
-            .map(|sigma| sigma.to_char())
+            .map(|&sigma| char::from(sigma))
             .collect()
+    }
+
+    #[must_use]
+    pub fn machine(&self) -> &'a TuringMachine {
+        self.machine
+    }
+
+    /// The tapes, each as far as it has been written or visited.
+    #[must_use]
+    pub fn tapes(&self) -> &[Vec<Symbol>] {
+        &self.tapes
+    }
+
+    #[must_use]
+    pub fn heads(&self) -> &[usize] {
+        &self.heads
+    }
+
+    #[must_use]
+    pub fn state(&self) -> usize {
+        self.state
+    }
+
+    #[must_use]
+    pub fn is_halted(&self) -> bool {
+        self.halted
+    }
+
+    /// The number of steps run so far.
+    #[must_use]
+    pub fn steps(&self) -> u64 {
+        self.steps
     }
 }

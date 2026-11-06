@@ -3,14 +3,14 @@ use std::process::Command;
 
 use num_bigint::BigUint;
 
-use simple_tm::tm::{Configuration, Row, SIGMA, TuringMachine, encode, load_machine};
+use simple_tm::tm::{Configuration, Row, SIGMA, TuringMachine, encode};
 
 fn machines() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../machines")
 }
 
 fn machine(name: &str) -> TuringMachine {
-    load_machine(&machines().join(format!("{name}.json"))).unwrap()
+    TuringMachine::from_path(machines().join(format!("{name}.json"))).unwrap()
 }
 
 fn rows(delta: &[(usize, &str, usize, &str, &str)]) -> Vec<Row> {
@@ -28,8 +28,8 @@ fn identity_one_and_zero() {
     for n in 0..7 {
         for x in strings(n) {
             for (m, want) in machines.iter().zip([x.as_str(), "1", "0"]) {
-                let mut run = Configuration::new(m, &x);
-                assert!(run.run(100) && run.output() == want, "{} {x}", m.name);
+                let mut run = Configuration::new(m, &x).unwrap();
+                assert!(run.run(100) && run.output() == want, "{} {x}", m.name());
             }
         }
     }
@@ -45,11 +45,11 @@ fn stay_move_keeps_the_head_in_place() {
     // S writes but does not move: tape 1 stays on cell 1 (writing 0 then 1), tape 2 moves right.
     let delta =
         rows(&[(0, "▷▷", 1, "▷▷", "RR"), (1, "1∅", 2, "0∅", "SR"), (2, "0∅", 2, "1∅", "SH")]);
-    let m = TuringMachine::new("t", "", 3, 1, 2, delta).unwrap();
-    let mut run = Configuration::new(&m, "1");
-    assert!(run.run(10) && run.n_steps == 3);
-    assert_eq!(run.heads, [1, 2]);
-    assert_eq!(run.tapes[0][1].to_char(), '1');
+    let m = TuringMachine::new("t", "", 3, 1, 2, &delta).unwrap();
+    let mut run = Configuration::new(&m, "1").unwrap();
+    assert!(run.run(10) && run.steps() == 3);
+    assert_eq!(run.heads(), [1, 2]);
+    assert_eq!(char::from(run.tapes()[0][1]), '1');
 }
 
 #[test]
@@ -61,23 +61,24 @@ fn moving_left_from_0_stays_at_0_and_output_stops_at_blank() {
         (1, "1", 1, "∅", "R"),
         (1, "0", 1, "0", "H"),
     ]);
-    let m = TuringMachine::new("t", "", 2, 1, 1, delta).unwrap();
-    let mut run = Configuration::new(&m, "10");
+    let m = TuringMachine::new("t", "", 2, 1, 1, &delta).unwrap();
+    let mut run = Configuration::new(&m, "10").unwrap();
     run.run(1);
-    assert_eq!(run.heads, [0]);
+    assert_eq!(run.heads(), [0]);
     assert!(run.run(10) && run.output().is_empty());
 }
 
 #[test]
 fn reverse_uses_two_tapes() {
     let reverse = machine("reverse");
-    assert_eq!((reverse.n_states, reverse.n_tapes), (2, 2));
+    assert_eq!((reverse.num_states(), reverse.num_tapes()), (2, 2));
     for n in 0..8 {
         for x in strings(n) {
-            let mut run = Configuration::new(&reverse, &x);
+            let mut run = Configuration::new(&reverse, &x).unwrap();
             assert!(run.run(1000) && run.output() == x.chars().rev().collect::<String>(), "{x}");
             // Tape 2 still holds the copy.
-            let copy: String = run.tapes[1][1..=n].iter().map(|sigma| sigma.to_char()).collect();
+            let copy: String =
+                run.tapes()[1][1..=n].iter().map(|&sigma| char::from(sigma)).collect();
             assert_eq!(copy, x);
         }
     }
@@ -85,21 +86,21 @@ fn reverse_uses_two_tapes() {
 
 #[test]
 fn multi_tape_halts_when_any_move_is_h() {
-    let m = TuringMachine::new("t", "", 1, 1, 2, rows(&[(0, "▷▷", 0, "▷▷", "RH")])).unwrap();
-    let mut run = Configuration::new(&m, "1");
-    assert!(run.run(10) && run.n_steps == 1);
-    assert_eq!(run.heads, [1, 0]);
+    let m = TuringMachine::new("t", "", 1, 1, 2, &rows(&[(0, "▷▷", 0, "▷▷", "RH")])).unwrap();
+    let mut run = Configuration::new(&m, "1").unwrap();
+    assert!(run.run(10) && run.steps() == 1);
+    assert_eq!(run.heads(), [1, 0]);
 }
 
 #[test]
 fn new_checks_states_are_below_n_states() {
-    assert!(TuringMachine::new("bad", "", 2, 1, 1, rows(&[(0, "▷", 2, "▷", "R")])).is_err());
+    assert!(TuringMachine::new("bad", "", 2, 1, 1, &rows(&[(0, "▷", 2, "▷", "R")])).is_err());
 }
 
 #[test]
 fn new_rejects_repeated_rows() {
     let delta = rows(&[(0, "▷", 0, "▷", "R"), (0, "▷", 0, "▷", "L")]);
-    assert!(TuringMachine::new("bad", "", 1, 1, 1, delta).is_err());
+    assert!(TuringMachine::new("bad", "", 1, 1, 1, &delta).is_err());
 }
 
 #[test]
@@ -115,7 +116,7 @@ fn every_machine_loads() {
     for entry in machines().read_dir().unwrap() {
         let path = entry.unwrap().path();
         if path.extension().is_some_and(|ext| ext == "json") {
-            load_machine(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            TuringMachine::from_path(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         }
     }
 }
@@ -175,10 +176,10 @@ fn two_inputs() {
     ];
     for (name, f) in machines {
         let m = machine(name);
-        assert_eq!(m.n_inputs, 2);
+        assert_eq!(m.num_inputs(), 2);
         for a in 0..32 {
             for b in 0..32 {
-                let mut run = Configuration::new(&m, &encode(&[a.into(), b.into()]));
+                let mut run = Configuration::new(&m, &encode(&[a.into(), b.into()])).unwrap();
                 match f(a, b) {
                     // Undefined: M never halts.
                     None => assert!(!run.run(10_000), "{name} {a} {b}"),
@@ -204,11 +205,18 @@ fn one_input() {
     ];
     for (name, f) in machines {
         let m = machine(name);
-        assert_eq!(m.n_inputs, 1);
+        assert_eq!(m.num_inputs(), 1);
         for n in 0..1024 {
-            let mut run = Configuration::new(&m, &encode(&[n.into()]));
+            let mut run = Configuration::new(&m, &encode(&[n.into()])).unwrap();
             assert!(run.run(1_000_000), "{name} {n}");
             assert_eq!(run.output(), format!("{:b}", f(n)), "{name} {n}");
         }
     }
+}
+
+#[test]
+fn new_rejects_non_binary_input() {
+    let m = machine("identity");
+    assert!(Configuration::new(&m, "12").is_err());
+    assert!(Configuration::new(&m, "▷").is_err());
 }
